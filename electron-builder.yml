@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.ai-comic.web",
+  "productName": "AI Comic Web",
+  "directories": {
+    "buildResources": "resources",
+    "output": "dist-electron"
+  },
+  "files": [
+    "!**/.vscode/*",
+    "!src/*",
+    "!electron.vite.config.*",
+    "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}",
+    "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
+  ],
+  "win": {
+    "target": ["nsis"],
+    "icon": "resources/icon.ico"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
+  },
+  "mac": {
+    "target": ["dmg"],
+    "icon": "resources/icon.icns"
+  },
+  "linux": {
+    "target": ["AppImage"],
+    "icon": "resources/icon.png"
+  }
+}
