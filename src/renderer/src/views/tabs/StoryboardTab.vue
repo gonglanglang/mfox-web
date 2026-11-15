@@ -180,7 +180,20 @@ async function updateTransition(event: Event) {
 function confirmVideo() {
   if (!selectedPanelData.value || isGenerating.value) return
   if (!videoModel.value) { showToast('请选择视频模型', 'info'); return }
-  if (!selectedPanelData.value.firstFrameUrl) { showToast('请先生成分镜主关键帧（首帧）', 'info'); return }
+  const p = selectedPanelData.value
+  const gm = p.gen_mode || (p.frame_mode === 'dual' ? 'frames2video' : 'singleImage2video')
+  const hasFusionRefs = Boolean(
+    p.firstFrameUrl ||
+    p.reference_frame_url ||
+    p.character_refs?.some(r => r.image_url) ||
+    p.roles?.length ||
+    p.scene_id ||
+    p.prop_ids?.length,
+  )
+  if (gm !== 'text2video' && !((gm === 'image2video' || gm === 'mixed2video') && hasFusionRefs) && !p.firstFrameUrl) {
+    showToast('请先生成分镜主关键帧（首帧），或切换为多图参考融合/文生视频模式', 'info')
+    return
+  }
   videoConfirm.value = true
 }
 
@@ -305,8 +318,21 @@ async function openRedrawConfirm() {
     return showToast('请先填写画面提示词', 'info')
   if (!panel.start_prompt?.trim()) panel.start_prompt = promptText
   if (!panel.image_prompt?.trim()) panel.image_prompt = promptText
-  if (activeFrameMode.value === 'dual' && !panel.end_prompt?.trim()) {
-    panel.end_prompt = promptText
+  if (
+    activeFrameMode.value === 'dual' &&
+    (!panel.end_prompt?.trim() || panel.end_prompt.trim() === panel.start_prompt.trim())
+  ) {
+    const actionCue = (
+      panel.character_action ||
+      panel.subject_motion ||
+      panel.motion_prompt ||
+      panel.camera_movement ||
+      ''
+    ).trim()
+    const base = promptText.replace(/[。.,，；;\s]+$/g, '')
+    panel.end_prompt = actionCue
+      ? `${base}，动作演进落幅：${actionCue}，画面定格于动作完成态`
+      : `${base}，镜头推演收束后的落幅定格构图`
   }
   if (!props.model) return showToast('请先在顶部选择图片模型', 'info')
   if (!props.modelResolution) return showToast('请选择图片分辨率', 'info')
@@ -908,7 +934,7 @@ async function runBatchNodes(nodeType: 'image' | 'video' | 'audio') {
 // ── 版本对比抽屉 (F2) ──
 const versionDrawerOpen = ref(false)
 const versionDrawerPanel = ref<Panel | null>(null)
-const versionDrawerTab = ref<'first_frame' | 'video' | 'tts'>('first_frame')
+const versionDrawerTab = ref<'first_frame' | 'last_frame' | 'video' | 'tts'>('first_frame')
 const versionList = ref<ShotAssetVersionItem[]>([])
 const versionLoading = ref(false)
 
@@ -916,7 +942,10 @@ const filteredVersions = computed(() =>
   versionList.value.filter(v => v.asset_type === versionDrawerTab.value),
 )
 
-async function openVersionDrawer(panel: Panel, tab: 'first_frame' | 'video' | 'tts' = 'first_frame') {
+async function openVersionDrawer(
+  panel: Panel,
+  tab: 'first_frame' | 'last_frame' | 'video' | 'tts' = 'first_frame',
+) {
   versionDrawerPanel.value = panel
   versionDrawerTab.value = tab
   versionDrawerOpen.value = true
@@ -960,6 +989,14 @@ async function switchAssetVersion(ver: ShotAssetVersionItem) {
       } else {
         showToast(`已切换至首帧 v${ver.version}`, 'success')
       }
+    } else if (ver.asset_type === 'last_frame') {
+      panel.lastFrameUrl = ver.url
+      if (panel.finalVideoUrl) {
+        panel.videoNeedsRerun = true
+        showToast(`已切换至尾帧 v${ver.version}，下游视频已标记为「需重跑」`, 'info')
+      } else {
+        showToast(`已切换至尾帧 v${ver.version}`, 'success')
+      }
     } else if (ver.asset_type === 'video') {
       panel.finalVideoUrl = ver.url
       panel.videoNeedsRerun = false
@@ -971,12 +1008,85 @@ async function switchAssetVersion(ver: ShotAssetVersionItem) {
     if (res.shot) {
       Object.assign(panel, {
         firstFrameUrl: res.shot.firstFrameUrl ?? panel.firstFrameUrl,
+        lastFrameUrl: res.shot.lastFrameUrl ?? panel.lastFrameUrl,
         finalVideoUrl: res.shot.finalVideoUrl ?? panel.finalVideoUrl,
         videoNeedsRerun: res.shot.videoNeedsRerun ?? panel.videoNeedsRerun,
       })
     }
+    const source = panel.sceneIdx !== undefined && panel.shotIdx !== undefined
+      ? (props.panels[panel.sceneIdx] as any)?.shots?.[panel.shotIdx]
+      : props.panels.find((item, index) => (item.panelIdx ?? index) === panel.panelIdx)
+    if (source) {
+      Object.assign(source, {
+        firstFrameUrl: panel.firstFrameUrl,
+        lastFrameUrl: panel.lastFrameUrl,
+        finalVideoUrl: panel.finalVideoUrl,
+        videoNeedsRerun: panel.videoNeedsRerun,
+      })
+    }
   } catch (err: any) {
     showToast(err.message || '切换版本失败', 'error')
+  }
+}
+
+// ── AnimaHub 上下文滑动窗口 { prev, curr, next } 提示词/尾帧推理 ──
+const inferringPromptsMode = ref<'contextual' | 'end_frame' | null>(null)
+async function onInferShotPrompts(mode: 'contextual' | 'end_frame' = 'contextual') {
+  const panel = selectedPanelData.value
+  if (!panel || !props.workId || !props.chapterId || inferringPromptsMode.value || isGenerating.value) return
+  const panelIdx = panel.panelIdx ?? panels.value.indexOf(panel)
+  if (panelIdx < 0) return
+  inferringPromptsMode.value = mode
+  try {
+    await savePanel(panel)
+    const res = await chaptersApi.inferShotPrompts({
+      workId: props.workId,
+      chapterId: props.chapterId,
+      panelIdx,
+      mode,
+      save: true,
+      model: props.textModel || undefined,
+    })
+    const p = res.prompts
+    if (mode === 'end_frame') {
+      panel.end_prompt = p.end_prompt
+    } else {
+      panel.image_prompt = p.image_prompt
+      panel.start_prompt = p.start_prompt
+      panel.end_prompt = p.end_prompt
+      panel.motion_prompt = p.motion_prompt
+      panel.videoPrompt = p.videoPrompt
+      if (p.lighting) panel.lighting = p.lighting
+      if (p.emotion) panel.emotion = p.emotion
+    }
+    const source = panel.sceneIdx !== undefined && panel.shotIdx !== undefined
+      ? (props.panels[panel.sceneIdx] as any)?.shots?.[panel.shotIdx]
+      : props.panels.find((item, index) => (item.panelIdx ?? index) === panel.panelIdx)
+    if (source) {
+      if (mode === 'end_frame') {
+        source.end_prompt = panel.end_prompt
+      } else {
+        Object.assign(source, {
+          image_prompt: panel.image_prompt,
+          start_prompt: panel.start_prompt,
+          end_prompt: panel.end_prompt,
+          motion_prompt: panel.motion_prompt,
+          videoPrompt: panel.videoPrompt,
+          ...(p.lighting ? { lighting: panel.lighting } : {}),
+          ...(p.emotion ? { emotion: panel.emotion } : {}),
+        })
+      }
+    }
+    showToast(
+      mode === 'end_frame'
+        ? '已结合当前画面与动作演进推理生成尾帧提示词'
+        : '已结合前后镜上下文推理优化首帧、尾帧与运动提示词',
+      'success',
+    )
+  } catch (err: any) {
+    showToast(err.message || '提示词推理失败', 'error')
+  } finally {
+    inferringPromptsMode.value = null
   }
 }
 
@@ -1614,15 +1724,33 @@ onUnmounted(() => {
           </div>
 
           <div>
-            <span class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider block mb-1.5">
-              画面提示词 (image_prompt / 静态首帧构图)
-            </span>
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+              <span class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider">
+                画面提示词 (image_prompt / 静态首帧构图)
+              </span>
+              <button type="button" class="btn btn-xs btn-ghost text-primary h-5 min-h-0 px-1.5 text-[10px]"
+                :disabled="isGenerating || inferringPromptsMode !== null"
+                title="结合上一镜、当前镜与下一镜上下文，自动推理优化首帧、尾帧与动态提示词"
+                @click="onInferShotPrompts('contextual')">
+                <span v-if="inferringPromptsMode === 'contextual'" class="loading loading-spinner loading-2xs mr-1"></span>
+                AI 上下文推理
+              </button>
+            </div>
             <textarea :value="selectedPanelData.image_prompt || selectedPanelData.start_prompt || ''" :disabled="isGenerating"
               class="textarea w-full"
               rows="3" placeholder="关键帧（首帧）静态画面构图提示词..." @change="updateShotText('image_prompt', ($event.target as HTMLTextAreaElement).value)"></textarea>
           </div>
           <div v-if="activeFrameMode === 'dual'">
-            <span class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider block mb-1.5">尾帧提示词</span>
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+              <span class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider">尾帧提示词</span>
+              <button type="button" class="btn btn-xs btn-ghost text-primary h-5 min-h-0 px-1.5 text-[10px]"
+                :disabled="isGenerating || inferringPromptsMode !== null"
+                title="结合当前首帧构图与镜头动作演进，自动推理动作完成态的尾帧提示词"
+                @click="onInferShotPrompts('end_frame')">
+                <span v-if="inferringPromptsMode === 'end_frame'" class="loading loading-spinner loading-2xs mr-1"></span>
+                AI 推理尾帧
+              </button>
+            </div>
             <textarea :value="selectedPanelData.end_prompt || ''" :disabled="isGenerating"
               class="textarea w-full"
               rows="3" placeholder="尾帧提示词..." @change="updateShotText('end_prompt', ($event.target as HTMLTextAreaElement).value)"></textarea>
@@ -1671,11 +1799,16 @@ onUnmounted(() => {
           <button type="button" class="btn btn-ghost btn-xs btn-circle" @click="versionDrawerOpen = false">✕</button>
         </div>
 
-        <div class="px-5 py-2 border-b border-base-200 flex items-center gap-2">
+        <div class="px-5 py-2 border-b border-base-200 flex items-center gap-1.5 flex-wrap">
           <button type="button" class="btn btn-xs"
             :class="versionDrawerTab === 'first_frame' ? 'btn-primary' : 'btn-ghost'"
             @click="versionDrawerTab = 'first_frame'">
-            关键帧图片
+            首帧图片
+          </button>
+          <button type="button" class="btn btn-xs"
+            :class="versionDrawerTab === 'last_frame' ? 'btn-primary' : 'btn-ghost'"
+            @click="versionDrawerTab = 'last_frame'">
+            尾帧图片
           </button>
           <button type="button" class="btn btn-xs"
             :class="versionDrawerTab === 'video' ? 'btn-primary' : 'btn-ghost'"
@@ -1708,7 +1841,7 @@ onUnmounted(() => {
                 <span v-if="ver.model" class="text-[10px] text-base-content/50">{{ ver.model }}</span>
                 <span v-if="ver.gen_mode" class="badge badge-xs badge-outline">{{ ver.gen_mode }}</span>
               </div>
-              <button v-if="ver.is_current !== 1 && ver.status === 'completed' && ver.url"
+              <button v-if="ver.is_current !== 1 && (ver.status === 'completed' || (ver.status as string) === 'done') && ver.url"
                 type="button" class="btn btn-xs btn-primary"
                 @click="switchAssetVersion(ver)">
                 设为当前版本

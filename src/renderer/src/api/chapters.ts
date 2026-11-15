@@ -355,6 +355,38 @@ export const chaptersApi = {
     }>('/pipeline/models/capabilities', { model })
   },
 
+  /** AnimaHub 上下文滑动窗口 { prev, curr, next } 分镜提示词/尾帧推理 */
+  inferShotPrompts(data: {
+    workId: number
+    chapterId: number
+    panelIdx: number
+    mode?: 'contextual' | 'end_frame'
+    save?: boolean
+    model?: string
+  }) {
+    return post<{
+      panelIdx: number
+      sceneIndex: number
+      shotIndex: number
+      mode: 'contextual' | 'end_frame'
+      source: 'agent' | 'deterministic'
+      prompts: {
+        image_prompt: string
+        start_prompt: string
+        end_prompt: string
+        motion_prompt: string
+        videoPrompt: string
+        lighting?: string
+        emotion?: string
+      }
+      shot: any
+    }>(
+      '/pipeline/prompts/infer',
+      data,
+      data.model ? { headers: { aiModel: data.model } } : undefined,
+    )
+  },
+
   redrawFrame(panelData: {
     /** 必填：前端确认过的报价，服务端据此拦截参数变化后的旧报价 */
     expectedCost: number
