@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { modelsApi, type ModelItem, type ModelContentType } from '@/api/models'
 import AppModal from '@/components/AppModal.vue'
 import { useModelPreferencesStore } from '@/stores/modelPreferences'
+import { SKIP_AUTH_MODE } from '@/composables/useAuth'
 
 /**
  * 模型选择组件（下拉框）
@@ -170,6 +171,7 @@ interface TierOption {
 }
 
 function getModelCost(model: ModelItem) {
+  if (SKIP_AUTH_MODE) return 0
   // 价格统一来自 price_config：先匹配当前档位，再回退「默认」档，最后用第一档
   const tiers = Array.isArray(model.price_config) ? model.price_config : []
   if (!tiers.length) return 0
@@ -201,7 +203,11 @@ const resolutionOptions = computed<TierOption[]>(() => {
     // 「默认」档是固定价（不选档位时生效），不作为可选项展示
     if (!label || !value || label === '默认') return []
     const price = Number(tier?.price)
-    return [{ label, value, price: Number.isFinite(price) && price >= 0 ? Math.floor(price) : 0 }]
+    return [{
+      label,
+      value,
+      price: SKIP_AUTH_MODE ? 0 : (Number.isFinite(price) && price >= 0 ? Math.floor(price) : 0),
+    }]
   })
 })
 
@@ -372,7 +378,7 @@ function onResolutionChange(e: Event) {
         </div>
         <div class="flex justify-between gap-4 border-t border-base-200 pt-3">
           <span class="text-base-content/60">本次消耗</span>
-          <span class="font-bold text-primary">{{ confirmCost }} 积分</span>
+          <span class="font-bold text-primary">{{ SKIP_AUTH_MODE ? '免积分（测试模式）' : `${confirmCost} 积分` }}</span>
         </div>
       </div>
       <div class="modal-action">

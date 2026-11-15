@@ -19,8 +19,39 @@ export interface UserInfo {
   createdAt: string
 }
 
-const isLoggedIn = ref(false)
-const user = ref<UserInfo | null>(null)
+export const BYPASS_TOKEN_SENTINEL = 'dev-bypass-token'
+export const SKIP_AUTH_MODE =
+  String(import.meta.env.VITE_SKIP_AUTH ?? 'true').trim().toLowerCase() !== 'false'
+
+function createBypassUserPlaceholder(): UserInfo {
+  return {
+    id: 1,
+    nickname: '测试免登用户',
+    penName: '测试创作者',
+    gender: 'secret',
+    avatar: '',
+    bio: '临时免登录、免Token校验、免积分测试模式',
+    email: '',
+    phone: '',
+    wechatOpenid: 'dev_bypass_default_user',
+    wechatUnionid: '',
+    appId: 'dev_bypass_app',
+    loginType: 'account',
+    points: 99999999,
+    createdAt: new Date().toISOString(),
+  }
+}
+
+if (typeof window !== 'undefined' && SKIP_AUTH_MODE) {
+  try {
+    if (!localStorage.getItem('token')) {
+      localStorage.setItem('token', BYPASS_TOKEN_SENTINEL)
+    }
+  } catch { /* ignore storage errors */ }
+}
+
+const isLoggedIn = ref(SKIP_AUTH_MODE)
+const user = ref<UserInfo | null>(SKIP_AUTH_MODE ? createBypassUserPlaceholder() : null)
 const showLoginModal = ref(false)
 const authReady = ref(false)
 
@@ -28,6 +59,15 @@ const authReady = ref(false)
 // request.ts 无法直接引用 useAuth（避免循环依赖），通过事件解耦，
 // 且此监听在模块加载时注册，不依赖任何组件挂载。
 function handleGlobalUnauthorized(): void {
+  if (SKIP_AUTH_MODE) {
+    isLoggedIn.value = true
+    showLoginModal.value = false
+    if (!user.value) user.value = createBypassUserPlaceholder()
+    try {
+      localStorage.setItem('token', BYPASS_TOKEN_SENTINEL)
+    } catch { /* ignore */ }
+    return
+  }
   isLoggedIn.value = false
   user.value = null
   localStorage.removeItem('token')
@@ -40,7 +80,13 @@ if (typeof window !== 'undefined') {
 
 /** 页面加载时自动恢复登录态 */
 export async function initAuth(): Promise<void> {
-  const token = localStorage.getItem('token')
+  let token = localStorage.getItem('token')
+  if (!token && SKIP_AUTH_MODE) {
+    token = BYPASS_TOKEN_SENTINEL
+    try {
+      localStorage.setItem('token', token)
+    } catch { /* ignore */ }
+  }
   if (!token) {
     authReady.value = true
     return
@@ -54,10 +100,19 @@ export async function initAuth(): Promise<void> {
       wechatUnionid: (info as any).wechat_unionid ?? (info as any).wechatUnionid ?? '',
       appId: (info as any).app_id ?? (info as any).appId ?? '',
       loginType: (info as any).login_type ?? (info as any).loginType ?? 'account',
-      points: (info as any).points ?? 0,
+      points: (info as any).points ?? (SKIP_AUTH_MODE ? 99999999 : 0),
     }
     isLoggedIn.value = true
   } catch (err: any) {
+    if (SKIP_AUTH_MODE) {
+      try {
+        localStorage.setItem('token', BYPASS_TOKEN_SENTINEL)
+      } catch { /* ignore */ }
+      if (!user.value) user.value = createBypassUserPlaceholder()
+      isLoggedIn.value = true
+      authReady.value = true
+      return
+    }
     // 只在认证真正失效时才删除 token；网络错误/服务器故障保留 token 静默降级
     const isAuthExpired =
       err?.status === 401 ||
@@ -80,6 +135,13 @@ export function useAuth() {
   }
 
   function logout() {
+    if (SKIP_AUTH_MODE) {
+      showLoginModal.value = false
+      localStorage.setItem('token', BYPASS_TOKEN_SENTINEL)
+      isLoggedIn.value = true
+      void initAuth()
+      return
+    }
     isLoggedIn.value = false
     user.value = null
     localStorage.removeItem('token')
@@ -100,12 +162,17 @@ export function useAuth() {
         wechatUnionid: (info as any).wechat_unionid ?? (info as any).wechatUnionid ?? '',
         appId: (info as any).app_id ?? (info as any).appId ?? '',
         loginType: (info as any).login_type ?? (info as any).loginType ?? 'account',
-        points: (info as any).points ?? 0,
+        points: (info as any).points ?? (SKIP_AUTH_MODE ? 99999999 : 0),
       }
     } catch { /* ignore */ }
   }
 
   function openLogin() {
+    if (SKIP_AUTH_MODE) {
+      isLoggedIn.value = true
+      showLoginModal.value = false
+      return
+    }
     showLoginModal.value = true
   }
 

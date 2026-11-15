@@ -16,8 +16,13 @@ export interface ApiResponse<T = unknown> {
   message: string
 }
 
+const SKIP_AUTH_MODE =
+  String(import.meta.env.VITE_SKIP_AUTH ?? 'true').trim().toLowerCase() !== 'false'
+const BYPASS_TOKEN_SENTINEL = 'dev-bypass-token'
+
 /** 未登录：通知全局复位登录态并弹出登录框（由 useAuth 模块级监听处理） */
 function handleUnauthorized(): void {
+  if (SKIP_AUTH_MODE) return
   window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT))
 }
 
@@ -44,8 +49,8 @@ const instance: AxiosInstance = axios.create({
 // ============================================
 instance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // Attach token if exists
-    const token = localStorage.getItem('token')
+    // Attach token if exists (or bypass sentinel in test mode)
+    const token = localStorage.getItem('token') || (SKIP_AUTH_MODE ? BYPASS_TOKEN_SENTINEL : '')
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
     }
