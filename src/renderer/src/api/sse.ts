@@ -2,6 +2,7 @@ import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { toHttpError } from '@/utils/status'
 import { AUTH_UNAUTHORIZED_EVENT } from '@/utils/authEvents'
 import { useToast } from '@/composables/useToast'
+import { BYPASS_TOKEN_SENTINEL, SKIP_AUTH_MODE } from '@/composables/useAuth'
 
 const { show: showToast } = useToast()
 
@@ -29,7 +30,7 @@ export interface SSERequestOptions {
  */
 export function streamSSE(url: string, options: SSERequestOptions): { abort: () => void } {
   const method = options.method || 'POST'
-  const token = localStorage.getItem('token') || ''
+  const token = localStorage.getItem('token') || (SKIP_AUTH_MODE ? BYPASS_TOKEN_SENTINEL : '')
   const ctrl = new AbortController()
   // 业务错误（后端 sseError 发送 { error }）主动 abort 后，onerror 不再重复回调
   let aborted = false
@@ -47,7 +48,7 @@ export function streamSSE(url: string, options: SSERequestOptions): { abort: () 
     signal: ctrl.signal,
     async onopen(response) {
       if (!response.ok) {
-        if (response.status === 401) {
+        if (response.status === 401 && !SKIP_AUTH_MODE) {
           window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT))
         }
         throw await toHttpError(response)

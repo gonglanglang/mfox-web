@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { useAuth } from '@/composables/useAuth'
+import { useAuth, SKIP_AUTH_MODE } from '@/composables/useAuth'
 import { fetchWechatQr, checkWechatStatus } from '@/api/stream'
 import { authApi } from '@/api/auth'
 import AppModal from '@/components/AppModal.vue'
@@ -17,6 +17,10 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 const TEST_OPENID = 'oIrB72JwyfkjiPMSZvlEkRhbQfNU'
 
 async function loadQr(): Promise<void> {
+  if (SKIP_AUTH_MODE) {
+    showLoginModal.value = false
+    return
+  }
   qrExpired.value = false
   qrError.value = ''
   qrLoading.value = true
@@ -41,6 +45,7 @@ async function testLogin(): Promise<void> {
 }
 
 function startPoll(scene: string): void {
+  if (SKIP_AUTH_MODE) return
   pollTimer = setInterval(async () => {
     try {
       const { status, token } = await checkWechatStatus(scene)
@@ -61,6 +66,11 @@ function stopPoll(): void {
 }
 
 watch(showLoginModal, (open) => {
+  if (SKIP_AUTH_MODE) {
+    if (open) showLoginModal.value = false
+    stopPoll()
+    return
+  }
   if (open) {
     // 每次打开都重新加载二维码并启动轮询（旧二维码可能已过期）
     loadQr()
@@ -72,7 +82,7 @@ watch(showLoginModal, (open) => {
 </script>
 
 <template>
-  <AppModal :open="showLoginModal" @close="showLoginModal = false">
+  <AppModal v-if="!SKIP_AUTH_MODE" :open="showLoginModal && !SKIP_AUTH_MODE" @close="showLoginModal = false">
     <div class="modal-box max-w-md p-0 overflow-hidden">
       <!-- 扫码区 -->
       <div class="p-8 flex flex-col items-center justify-center">
