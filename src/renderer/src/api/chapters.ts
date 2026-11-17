@@ -1,5 +1,6 @@
 import { get, post, put, patch, del } from './request'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
+import { getAuthHeaders } from '@/composables/useAuth'
 import type { FrameMode, ScenePatch, ShotCharacterRef, ShotPatch, StoryScene, StoryShot, VideoGenMode } from '@/utils/storyboard'
 
 export interface ComposeClipInput {
@@ -149,7 +150,6 @@ export const chaptersApi = {
   /** AI 提取分镜（SSE 任务时间链） */
   breakdown(workId: number, chapterId: number, text: string): Promise<{ taskId: string; configs: any[] }> {
     const base = import.meta.env.VITE_API_BASE_URL || '/api'
-    const token = localStorage.getItem('token') || ''
     const ctrl = new AbortController()
 
     return new Promise((resolve, reject) => {
@@ -158,7 +158,7 @@ export const chaptersApi = {
 
       fetchEventSource(`${base}/agent/storyboard-breakdown`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ chapterId, text, workId }),
         signal: ctrl.signal,
         openWhenHidden: true,

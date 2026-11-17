@@ -50,6 +50,23 @@ if (typeof window !== 'undefined' && SKIP_AUTH_MODE) {
   } catch { /* ignore storage errors */ }
 }
 
+/** 获取当前请求应携带的鉴权 token（免登录测试模式下缺失时自动回退为占位 token，永不返回 'null'） */
+export function getAuthToken(): string {
+  try {
+    const raw = localStorage.getItem('token')
+    if (raw && raw !== 'null' && raw !== 'undefined') {
+      return raw
+    }
+  } catch { /* ignore storage errors */ }
+  return SKIP_AUTH_MODE ? BYPASS_TOKEN_SENTINEL : ''
+}
+
+/** 构造请求所需的 Authorization 头（无 token 且非免登模式时不注入空头） */
+export function getAuthHeaders(): Record<string, string> {
+  const token = getAuthToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 const isLoggedIn = ref(SKIP_AUTH_MODE)
 const user = ref<UserInfo | null>(SKIP_AUTH_MODE ? createBypassUserPlaceholder() : null)
 const showLoginModal = ref(false)

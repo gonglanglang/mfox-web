@@ -1,11 +1,11 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { worksApi } from '@/api'
 import { useToast } from '@/composables/useToast'
 import type { WorkItem } from '@/api'
 
-import { useAuth } from '@/composables/useAuth'
+import { useAuth, getAuthHeaders } from '@/composables/useAuth'
 import { WORK_TYPE_OPTIONS, WORK_TYPE_BADGE, buildFilterTags } from '@/config/constants'
 import WorkFormModal from '@/components/WorkFormModal.vue'
 import VideoChapterModal from '@/components/VideoChapterModal.vue'
@@ -233,10 +233,10 @@ async function handleSetCover() {
       const formData = new FormData()
       formData.append('file', coverFileForUpdate.value)
       formData.append('bucket', 'cover')
-      const token = localStorage.getItem('token')
-      const res = await fetch(`/api/oss/file`, {
+      const base = import.meta.env.VITE_API_BASE_URL || '/api'
+      const res = await fetch(`${base}/oss/file`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { ...getAuthHeaders() },
         body: formData,
       })
       const json = await res.json()

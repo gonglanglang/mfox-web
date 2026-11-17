@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { listTasks, type TaskItem } from '@/api/task'
+import { SKIP_AUTH_MODE, getAuthToken } from '@/composables/useAuth'
 
 /**
  * 全局任务状态（模块级单例，唯一的数据源）
@@ -15,7 +16,7 @@ const runningCount = ref(0)
 let inflight: Promise<TaskItem[]> | null = null
 
 function isLoggedIn(): boolean {
-  return !!localStorage.getItem('token')
+  return SKIP_AUTH_MODE || Boolean(getAuthToken())
 }
 
 /** 拉取任务列表并更新缓存（并发去重，未登录时返回空列表不请求） */

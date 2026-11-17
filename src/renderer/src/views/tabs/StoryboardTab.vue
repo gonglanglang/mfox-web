@@ -24,7 +24,7 @@ import DialoguePlayback from '@/components/DialoguePlayback.vue'
 import ImageViewer from '@/components/ImageViewer.vue'
 import StoryboardAssetBinding from '@/components/StoryboardAssetBinding.vue'
 import { useToast } from '@/composables/useToast'
-import { useAuth } from '@/composables/useAuth'
+import { useAuth, getAuthHeaders } from '@/composables/useAuth'
 
 // ── 接口 ──
 interface Role {
@@ -595,10 +595,9 @@ async function onGenerateVideo() {
     await savePanel(p)
     p.panelStatus = 'generating'
     p._task = 'video'
-    const token = localStorage.getItem('token') || ''
     const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api'}/agent/frame-video`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, aiModel: videoModel.value },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders(), aiModel: videoModel.value },
       body: JSON.stringify({
         workId: props.workId, // 作品 ID
         chapterId: props.chapterId, // 章节 ID

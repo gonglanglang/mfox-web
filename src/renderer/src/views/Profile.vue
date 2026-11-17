@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { authApi } from '@/api/auth'
@@ -9,10 +9,6 @@ import AppModal from '@/components/AppModal.vue'
 const router = useRouter()
 const { user, updateUser, refreshUser } = useAuth()
 
-onMounted(() => {
-  refreshUser()
-})
-
 const activeTab = ref<'profile' | 'delete'>('profile')
 
 const profileForm = reactive({
@@ -21,6 +17,23 @@ const profileForm = reactive({
   gender: user.value?.gender ?? 'secret',
   bio: user.value?.bio ?? '',
   email: user.value?.email ?? ''
+})
+
+watch(
+  user,
+  (val) => {
+    if (!val) return
+    profileForm.nickname = val.nickname ?? ''
+    profileForm.penName = val.penName ?? ''
+    profileForm.gender = val.gender ?? 'secret'
+    profileForm.bio = val.bio ?? ''
+    profileForm.email = val.email ?? ''
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  refreshUser()
 })
 
 const saving = ref(false)

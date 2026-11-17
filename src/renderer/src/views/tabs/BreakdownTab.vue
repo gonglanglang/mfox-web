@@ -6,6 +6,7 @@ import { get } from '@/api/request'
 import { listTasks } from '@/api/task'
 import { useWorkflowTimeline, type TimelineStep } from '@/composables/useWorkflowTimeline'
 import { useTaskRecovery } from '@/composables/useTaskRecovery'
+import { getAuthHeaders } from '@/composables/useAuth'
 import WorkflowTimeline from '@/components/WorkflowTimeline.vue'
 import DialogueEditor from '@/components/DialogueEditor.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
@@ -133,11 +134,10 @@ async function onBreakdown() {
   breakingDown.value = true
   tl.restore(STORYBOARD_STEPS.map(step => ({ ...step })))
   try {
-    const token = localStorage.getItem('token') || ''
     const base = import.meta.env.VITE_API_BASE_URL || '/api'
     const res = await fetch(`${base}/agent/storyboard-breakdown`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, aiModel: props.model },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders(), aiModel: props.model },
       body: JSON.stringify({ text: props.chapterContent, workId: props.workId, chapterId: props.chapterId }),
     })
     if (!res.ok) throw new Error(`提取分镜请求失败（${res.status}）`)
