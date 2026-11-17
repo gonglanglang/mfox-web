@@ -1,6 +1,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { listTasks, reconnectStream } from '@/api/task'
+import { SKIP_AUTH_MODE, getAuthToken } from '@/composables/useAuth'
 
 export interface TaskRecoveryStep {
   name: string
@@ -71,8 +72,7 @@ export function useTaskRecovery(
   let stopStream: (() => void) | null = null
 
   onMounted(async () => {
-    const token = localStorage.getItem('token')
-    if (!token) return
+    if (!SKIP_AUTH_MODE && !getAuthToken()) return
     const retries = options?.retries ?? 2
     const interval = options?.retryIntervalMs ?? 1000
 

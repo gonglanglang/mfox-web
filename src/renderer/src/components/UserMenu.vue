@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import { useAuth } from '@/composables/useAuth'
+import { useAuth, SKIP_AUTH_MODE } from '@/composables/useAuth'
 import { authApi } from '@/api/auth'
 import LoginModal from '@/components/LoginModal.vue'
 
@@ -55,7 +55,7 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
         </svg>
         个人信息
       </RouterLink>
-      <RouterLink to="/orders"
+      <RouterLink v-if="!SKIP_AUTH_MODE" to="/orders"
         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-base-200 transition-colors"
         @click="menuOpen = false">
         <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -64,16 +64,18 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
         </svg>
         订单信息
       </RouterLink>
-      <div class="border-t border-base-200"></div>
-      <button
-        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-base-content/60 hover:bg-base-200 transition-colors"
-        @click="handleLogout()">
-        <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-        </svg>
-        退出登录
-      </button>
+      <template v-if="!SKIP_AUTH_MODE">
+        <div class="border-t border-base-200"></div>
+        <button
+          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-base-content/60 hover:bg-base-200 transition-colors"
+          @click="handleLogout()">
+          <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          退出登录
+        </button>
+      </template>
     </div>
   </div>
 
@@ -93,5 +95,5 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
   </button>
 
   <!-- 登录弹窗（未登录时点击登录入口使用） -->
-  <LoginModal />
+  <LoginModal v-if="!SKIP_AUTH_MODE" />
 </template>

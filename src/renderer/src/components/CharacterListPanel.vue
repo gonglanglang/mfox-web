@@ -6,6 +6,7 @@ import { personasApi, type PersonaItem } from '@/api/personas'
 import { useWorkflowTimeline, type TimelineStep } from '@/composables/useWorkflowTimeline'
 import { useTaskRecovery } from '@/composables/useTaskRecovery'
 import { useToast } from '@/composables/useToast'
+import { getAuthHeaders } from '@/composables/useAuth'
 
 const props = defineProps<{
   workId: number
@@ -105,10 +106,10 @@ async function onExtractCharacters(assetType: AssetType | 'all' = 'all') {
   tl.restore(assetType === 'scene' || assetType === 'prop'
     ? [{ name: 'load-asset-context', label: '读取已有素材', status: 'wait' }, ...steps] : steps)
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/agent/character-extract', {
+    const base = import.meta.env.VITE_API_BASE_URL || '/api'
+    const res = await fetch(`${base}/agent/character-extract`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, aiModel: props.model },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders(), aiModel: props.model },
       body: JSON.stringify({
         text: props.chapterContent,
         workId: props.workId,

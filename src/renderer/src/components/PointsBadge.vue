@@ -4,7 +4,7 @@ import QRCode from 'qrcode'
 /* 工具函数 */
 import { formatNumber } from '@/utils/index'
 
-import { useAuth } from '@/composables/useAuth'
+import { useAuth, SKIP_AUTH_MODE } from '@/composables/useAuth'
 import { useToast } from '@/composables/useToast'
 import AppModal from '@/components/AppModal.vue'
 import { payApi, type RechargeOrderResult } from '@/api/pay'
@@ -146,8 +146,17 @@ onBeforeUnmount(stopPolling)
 </script>
 
 <template>
+  <!-- 测试模式徽章：免登录、免Token验证、免积分扣费 -->
+  <span
+    v-if="SKIP_AUTH_MODE"
+    class="badge badge-soft badge-success badge-sm gap-1 px-2.5 py-3 shrink-0"
+    title="当前处于临时测试模式：已关闭登录弹窗、Token强校验与积分扣除"
+  >
+    免登·免积分
+  </span>
+
   <!-- 积分徽章：点击弹出充值弹窗 -->
-  <button class="btn btn-sm badge badge-soft badge-primary" title="积分" @click.stop="open = true">
+  <button v-else class="btn btn-sm badge badge-soft badge-primary" title="积分" @click.stop="open = true">
     <svg class="icon" aria-hidden="true">
       <use xlink:href="#icon-jifen"></use>
     </svg>
@@ -155,7 +164,7 @@ onBeforeUnmount(stopPolling)
   </button>
 
   <!-- 充值弹窗 -->
-  <AppModal :open="open" @close="closeRecharge">
+  <AppModal v-if="!SKIP_AUTH_MODE" :open="open" @close="closeRecharge">
     <div v-if="open" class="modal-box rounded-2xl p-0 overflow-hidden pb-4" style="min-width: 720px">
       <div class="flex items-center justify-between px-5 py-4 border-b border-base-200">
         <h3 class="font-bold text-sm">充值积分</h3>

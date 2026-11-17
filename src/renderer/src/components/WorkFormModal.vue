@@ -10,6 +10,7 @@ import { genresApi } from '@/api/genres'
 import StylePicker from '@/components/StylePicker.vue'
 import AppModal from '@/components/AppModal.vue'
 import { useToast } from '@/composables/useToast'
+import { getAuthHeaders } from '@/composables/useAuth'
 import { ASPECT_RATIOS, ASPECT_RATIO_HINTS, AUDIENCES, DEFAULT_ASPECT_RATIO, POVS } from '@/config/constants'
 import type { AspectRatio, Audience, Pov, WorkType } from '@/config/constants'
 
@@ -107,10 +108,10 @@ async function uploadCover(): Promise<string | null> {
     const formData = new FormData()
     formData.append('file', coverFile.value)
     formData.append('bucket', 'cover')
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/oss/file`, {
+    const base = import.meta.env.VITE_API_BASE_URL || '/api'
+    const res = await fetch(`${base}/oss/file`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...getAuthHeaders() },
       body: formData,
     })
     const json = await res.json()
